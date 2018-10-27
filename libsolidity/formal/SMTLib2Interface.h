@@ -49,16 +49,15 @@ public:
 	void push() override;
 	void pop() override;
 
-	void declareFunction(std::string _name, std::vector<Sort> const& _domain, Sort _codomain) override;
-	void declareInteger(std::string _name) override;
-	void declareBool(std::string _name) override;
+	void declareVariable(std::string const&, Sort const&) override;
+	void declareFunction(std::string const& _name, std::vector<SortPointer> const& _domain, Sort const& _codomain) override;
 
 	void addAssertion(Expression const& _expr) override;
 	std::pair<CheckResult, std::vector<std::string>> check(std::vector<Expression> const& _expressionsToEvaluate) override;
 
 private:
 	std::string toSExpr(Expression const& _expr);
-	std::string toSSort(Sort _sort);
+	std::string toSSort(Sort const& _sort);
 
 	void write(std::string _data);
 
