@@ -27,6 +27,7 @@
 #include <libyul/optimiser/ExpressionJoiner.h>
 #include <libyul/optimiser/ExpressionInliner.h>
 #include <libyul/optimiser/FullInliner.h>
+#include <libyul/optimiser/ForLoopInitRewriter.h>
 #include <libyul/optimiser/Rematerialiser.h>
 #include <libyul/optimiser/UnusedPruner.h>
 #include <libyul/optimiser/ExpressionSimplifier.h>
@@ -107,6 +108,7 @@ void OptimiserSuite::run(
 	}
 	ExpressionJoiner::run(ast);
 	VarDeclPropagator{}(ast);
+	ForLoopInitRewriter{}(ast);
 	UnusedPruner::runUntilStabilised(ast);
 	ExpressionJoiner::run(ast);
 	UnusedPruner::runUntilStabilised(ast);
