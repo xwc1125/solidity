@@ -67,6 +67,7 @@ private:
 	virtual void endVisit(Literal const& _node) override;
 	virtual void endVisit(Return const& _node) override;
 	virtual bool visit(MemberAccess const& _node) override;
+	virtual void endVisit(IndexAccess const& _node) override;
 
 	void arithmeticOperation(BinaryOperation const& _op);
 	void compareOperation(BinaryOperation const& _op);
@@ -79,7 +80,10 @@ private:
 	/// Visits the FunctionDefinition of the called function
 	/// if available and inlines the return value.
 	void inlineFunctionCall(FunctionCall const&);
-	
+
+	/// Handles assignment to mapping/array
+	void arrayAssignment(Assignment const&);
+
 	void defineSpecialVariable(std::string const& _name, Expression const& _expr, bool _increaseIndex = false);
 	void defineUninterpretedFunction(std::string const& _name, std::vector<smt::SortPointer> const& _domain, smt::SortPointer _codomain);
 
@@ -199,6 +203,9 @@ private:
 	/// Stores the instances of an UF applied to arguments.
 	/// Used to retrieve models.
 	std::vector<smt::Expression> m_uTerms;
+	/// Stores the instances of array access.
+	/// Used to retrieve models.
+	std::vector<std::pair<IndexAccess const*, smt::Expression>> m_arrayTerms;
 	std::vector<smt::Expression> m_pathConditions;
 	ErrorReporter& m_errorReporter;
 

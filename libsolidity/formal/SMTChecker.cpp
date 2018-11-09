@@ -48,8 +48,7 @@ void SMTChecker::analyze(SourceUnit const& _source)
 bool SMTChecker::visit(ContractDefinition const& _contract)
 {
 	for (auto _var : _contract.stateVariables())
-		if (_var->type()->isValueType())
-			createVariable(*_var);
+		createVariable(*_var);
 	return true;
 }
 
@@ -81,6 +80,7 @@ bool SMTChecker::visit(FunctionDefinition const& _function)
 		m_specialVariables.clear();
 		m_uFunctions.clear();
 		m_uTerms.clear();
+		m_arrayTerms.clear();
 		resetStateVariables();
 		initializeLocalVariables(_function);
 	}
@@ -238,11 +238,69 @@ void SMTChecker::endVisit(Assignment const& _assignment)
 				"Assertion checker does not yet implement such assignments."
 			);
 	}
+	else if (dynamic_cast<IndexAccess const*>(&_assignment.leftHandSide()))
+		arrayAssignment(_assignment);
 	else
 		m_errorReporter.warning(
 			_assignment.location(),
 			"Assertion checker does not yet implement such assignments."
 		);
+}
+
+void SMTChecker::arrayAssignment(Assignment const& _assignment)
+{
+	auto left = dynamic_cast<IndexAccess const*>(&_assignment.leftHandSide());
+	solAssert(left, "");
+
+	vector<smt::Expression> stores;
+	stores.emplace_back(expr(_assignment.rightHandSide()));
+	bool error = false;
+	// This loop handles multi-dimensional arrays.
+	// The first element in stores, added above, stores the actual assigned
+	// value in the innermost mapping.
+	// The others store the previously modified mapping into the next outer mapping.
+	while (!error && !dynamic_cast<Identifier const*>(&left->baseExpression()))
+	{
+		if (auto base = dynamic_cast<IndexAccess const*>(&left->baseExpression()))
+		{
+			stores.emplace_back(
+				smt::Expression::store(
+					expr(left->baseExpression()),
+					expr(*left->indexExpression()),
+					stores.back()
+				));
+			left = base;
+		}
+		else
+			error = true;
+	}
+	if (error)
+		m_errorReporter.warning(
+			_assignment.location(),
+			"Assertion checker does not yet implement such assignments."
+		);
+	else
+	{
+		Identifier const* id = dynamic_cast<Identifier const*>(&left->baseExpression());
+		solAssert(id, "");
+		VariableDeclaration const& varDecl = dynamic_cast<VariableDeclaration const&>(*id->annotation().referencedDeclaration);
+		if (knownVariable(varDecl))
+		{
+			m_interface->addAssertion(
+				newValue(varDecl) == smt::Expression::store(
+					expr(*id),
+					expr(*left->indexExpression()),
+					stores.back()
+				)
+			);
+			defineExpr(_assignment, expr(_assignment.rightHandSide()));
+		}
+		else
+			m_errorReporter.warning(
+				_assignment.location(),
+				"Assertion checker does not yet implement such assignments."
+			);
+	}
 }
 
 void SMTChecker::endVisit(TupleExpression const& _tuple)
@@ -573,6 +631,36 @@ bool SMTChecker::visit(MemberAccess const& _memberAccess)
 	return true;
 }
 
+void SMTChecker::endVisit(IndexAccess const& _indexAccess)
+{
+	bool error = false;
+	if (Identifier const* id = dynamic_cast<Identifier const*>(&_indexAccess.baseExpression()))
+	{
+		VariableDeclaration const& varDecl = dynamic_cast<VariableDeclaration const&>(*id->annotation().referencedDeclaration);
+		if (knownVariable(varDecl))
+			m_arrayTerms.emplace_back(make_pair(&_indexAccess, smt::Expression::select(currentValue(varDecl), expr(*_indexAccess.indexExpression()))));
+		else
+			error = true;
+	}
+	else if (IndexAccess const* innerAccess = dynamic_cast<IndexAccess const*>(&_indexAccess.baseExpression()))
+	{
+		if (knownExpr(*innerAccess))
+			m_arrayTerms.emplace_back(make_pair(&_indexAccess, smt::Expression::select(expr(*innerAccess), expr(*_indexAccess.indexExpression()))));
+		else
+			error = true;
+	}
+	else
+		error = true;
+
+	if (error)
+		m_errorReporter.warning(
+			_indexAccess.location(),
+			"Assertion checker does not yet implement this expression."
+		);
+	else
+		defineExpr(_indexAccess, m_arrayTerms.back().second);
+}
+
 void SMTChecker::defineSpecialVariable(string const& _name, Expression const& _expr, bool _increaseIndex)
 {
 	if (!knownSpecialVariable(_name))
@@ -773,8 +861,11 @@ void SMTChecker::checkCondition(
 		}
 		for (auto const& var: m_variables)
 		{
-			expressionsToEvaluate.emplace_back(currentValue(*var.first));
-			expressionNames.push_back(var.first->name());
+			if (var.first->type()->isValueType())
+			{
+				expressionsToEvaluate.emplace_back(currentValue(*var.first));
+				expressionNames.push_back(var.first->name());
+			}
 		}
 		for (auto const& var: m_specialVariables)
 		{
@@ -784,6 +875,9 @@ void SMTChecker::checkCondition(
 		// Names for UFs are created later (needs model for arguments)
 		for (auto const& uf: m_uTerms)
 			expressionsToEvaluate.emplace_back(uf);
+		// Names for array access are created later (needs model for index)
+		for (auto const& array: m_arrayTerms)
+			expressionsToEvaluate.emplace_back(array.second);
 		// We need to get models for the internal expressions as well to show
 		// the arguments of uninterpreted functions properly.
 		unsigned exprIndex = expressionsToEvaluate.size();
@@ -812,14 +906,14 @@ void SMTChecker::checkCondition(
 		{
 			std::ostringstream modelMessage;
 			modelMessage << "  for:\n";
-			solAssert(values.size() == (expressionNames.size() + m_expressions.size() + m_uTerms.size()), "");
+			solAssert(values.size() == (expressionNames.size() + m_uTerms.size() + m_arrayTerms.size() + m_expressions.size()), "");
 			map<string, string> sortedModel;
 			// Handle program variables first.
 			for (size_t i = 0; i < expressionNames.size(); ++i)
 				if (expressionsToEvaluate.at(i).name != values.at(i))
 					sortedModel[expressionNames.at(i)] = values.at(i);
 			// Handle uninterpreted functions.
-			for (size_t i = expressionNames.size(); i < values.size() - m_expressions.size(); ++i)
+			for (size_t i = expressionNames.size(); i < values.size() - m_expressions.size() - m_arrayTerms.size(); ++i)
 			{
 				auto const& uf = expressionsToEvaluate.at(i);
 				solAssert(uf.arguments.size() > 0, "");
@@ -836,6 +930,32 @@ void SMTChecker::checkCondition(
 				}
 				ufName += ')';
 				sortedModel[ufName] = values.at(i);
+			}
+			// Handle array access.
+			for (size_t i = expressionNames.size() + m_uTerms.size(), arr = 0; i < values.size() - m_expressions.size(); ++i, ++arr)
+			{
+				auto const& arrayAccess = expressionsToEvaluate.at(i);
+				if (arrayAccess.sort->kind == smt::Kind::Array)
+					continue;
+				string indexName("");
+				IndexAccess const* access = m_arrayTerms[arr].first;
+				while (true)
+				{
+					smt::Expression const& indexExpr = expr(*access->indexExpression());
+					indexName = '[' + values.at(expressionIndices.at(indexExpr.name)) + ']' + indexName;
+					if (IndexAccess const* innerAccess = dynamic_cast<IndexAccess const*>(&access->baseExpression()))
+						access = innerAccess;
+					else if (Identifier const* id = dynamic_cast<Identifier const*>(&access->baseExpression()))
+					{
+						indexName = id->name() + indexName;
+						break;
+					}
+					else
+						break;
+				}
+				// Do not show model if var name was not found.
+				if (indexName.at(0) != '[')
+					sortedModel[indexName] = values.at(i);
 			}
 			// Models for internal expressions expr_* are used for
 			// UF arguments and are not shown directly to the user.
