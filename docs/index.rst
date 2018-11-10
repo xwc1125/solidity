@@ -43,7 +43,7 @@ and details of the :ref:`Ethereum Virtual Machine <the-ethereum-virtual-machine>
 
     Smart contract users are sometimes more confident with code than their
     authors, and blockchains have their own unique issues to watch out for.
-    Before working on production code, make sure you read the :ref:`security_considerations` section.
+    Because of this, before working on production code, make sure you read the :ref:`security_considerations` section.
 
 If you have any questions, you can try searching for answers or asking on the
 `Ethereum Stackexchange <https://ethereum.stackexchange.com/>`_, or our `gitter channel <https://gitter.im/ethereum/solidity/>`_.
