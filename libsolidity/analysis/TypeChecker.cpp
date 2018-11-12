@@ -475,11 +475,32 @@ void TypeChecker::checkContractExternalTypeClashes(ContractDefinition const& _co
 	for (auto const& it: externalDeclarations)
 		for (size_t i = 0; i < it.second.size(); ++i)
 			for (size_t j = i + 1; j < it.second.size(); ++j)
-				if (!it.second[i].second->hasEqualParameterTypes(*it.second[j].second))
+			{
+				auto const& paramsI = it.second[i].second->parameterTypes();
+				auto const& paramsJ = it.second[j].second->parameterTypes();
+				if (
+					paramsI.size() != paramsJ.size() ||
+					!equal(
+						paramsI.cbegin(),
+						paramsI.cend(),
+						paramsJ.cbegin(),
+						[](TypePointer const& _a, TypePointer const& _b) -> bool {
+							if (*_a == *_b) return true;
+							if (auto const* ref = dynamic_cast<ReferenceType const*>(_b.get()))
+									if (
+										ref->dataStoredIn(DataLocation::CallData) &&
+										*_a == *ref->copyForLocation(DataLocation::Memory, ref->isPointer())
+									)
+										return true;
+							return false;
+						}
+					)
+				)
 					m_errorReporter.typeError(
 						it.second[j].first->location(),
 						"Function overload clash during conversion to external types for arguments."
 					);
+			}
 }
 
 void TypeChecker::checkLibraryRequirements(ContractDefinition const& _contract)

@@ -87,6 +87,7 @@ Language Features:
  * General: Allow ``struct``s in interfaces.
  * General: Provide access to the ABI decoder through ``abi.decode(bytes memory data, (...))``.
  * General: Disallow zero length for fixed-size arrays.
+ * Inheritance: Allow overwriting external functions with ``calldata`` arguments with public functions with ``memory`` arguments.
  * Parser: Accept the ``address payable`` type during parsing.
 
 Compiler Features:
