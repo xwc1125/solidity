@@ -1,3 +1,9 @@
+### 0.5.1 (unreleased)
+
+Bugfixes:
+ * Assembly output: Do not mix in/out jump annotations with arguments.
+ * Assembly: Annotate jump from calldata decoder to function as "jump in".
+
 ### 0.5.0 (unreleased)
 
 How to update your code:
