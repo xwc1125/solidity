@@ -25,7 +25,7 @@ Language Documentation
 If you are new to the concept of smart contracts we recommend you start with
 :ref:`an example smart contract <simple-smart-contract>` written
 in Solidity. When you are ready for more detail, we recommend you read the
-:doc:`"Solidity by Example" <solidity-by-example>` and :doc:`"Solidity in Depth" <solidity-in-depth>` sections to learn the core concepts of the language, and before working on production code, make sure you read the :ref:`security_considerations` section.
+:doc:`"Solidity by Example" <solidity-by-example>` and :doc:`"Solidity in Depth" <solidity-in-depth>` sections to learn the core concepts of the language.
 
 For further reading, try :ref:`the basics of blockchains <blockchain-basics>`
 and details of the :ref:`Ethereum Virtual Machine <the-ethereum-virtual-machine>`.
@@ -39,10 +39,11 @@ and details of the :ref:`Ethereum Virtual Machine <the-ethereum-virtual-machine>
 .. warning::
     As humans write software, it can have bugs. You should follow established
     software development best-practices when writing your smart contracts, this
-    includes code review, testing, audits, and correctness proofs. However, as
-    smart contract users are sometimes more confident with code than their
-    authors, blockchains and smart contracts have their own unique issues to
-    watch out for.
+    includes code review, testing, audits, and correctness proofs. Smart contract
+    users are sometimes more confident with code than their authors, and
+    blockchains and smart contracts have their own unique issues to
+    watch out for, so before working on production code, make sure you read the
+    :ref:`security_considerations` section.
 
 If you have any questions, you can try searching for answers or asking on the
 `Ethereum Stackexchange <https://ethereum.stackexchange.com/>`_, or our `gitter channel <https://gitter.im/ethereum/solidity/>`_.
