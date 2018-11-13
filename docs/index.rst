@@ -37,11 +37,12 @@ and details of the :ref:`Ethereum Virtual Machine <the-ethereum-virtual-machine>
   smart contracts. It can take a while to load, so please be patient.
 
 .. warning::
-    Humans write software, and it can have bugs. You should follow established
+    As humans write software, it can have bugs. You should follow established
     software development best-practices when writing your smart contracts, this
-    includes code review, testing, audits, and correctness proofs. Smart
-    contract users are sometimes more confident with code than their
-    authors, and blockchains have their own unique issues to watch out for.
+    includes code review, testing, audits, and correctness proofs. However, as
+    smart contract users are sometimes more confident with code than their
+    authors, blockchains and smart contracts have their own unique issues to
+    watch out for.
 
 If you have any questions, you can try searching for answers or asking on the
 `Ethereum Stackexchange <https://ethereum.stackexchange.com/>`_, or our `gitter channel <https://gitter.im/ethereum/solidity/>`_.
