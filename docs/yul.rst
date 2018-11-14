@@ -369,10 +369,10 @@ The following functions must be available:
 +---------------------------------------------+-----------------------------------------------------------------+
 | gtu256(x:u256, y:u256) -> z:bool            | true if x > y, false otherwise                                  |
 +---------------------------------------------+-----------------------------------------------------------------+
-| lts256(x:s256, y:s256) -> z:bool            | true if x < y, false otherwise                                  |
+| sltu256(x:s256, y:s256) -> z:bool           | true if x < y, false otherwise                                  |
 |                                             | (for signed numbers in two's complement)                        |
 +---------------------------------------------+-----------------------------------------------------------------+
-| gts256(x:s256, y:s256) -> z:bool            | true if x > y, false otherwise                                  |
+| sgtu256(x:s256, y:s256) -> z:bool           | true if x > y, false otherwise                                  |
 |                                             | (for signed numbers in two's complement)                        |
 +---------------------------------------------+-----------------------------------------------------------------+
 | equ256(x:u256, y:u256) -> z:bool            | true if x == y, false otherwise                                 |
@@ -391,7 +391,7 @@ The following functions must be available:
 +---------------------------------------------+-----------------------------------------------------------------+
 | shru256(x:u256, y:u256) -> z:u256           | logical right shift of x by y                                   |
 +---------------------------------------------+-----------------------------------------------------------------+
-| sars256(x:s256, y:u256) -> z:u256           | arithmetic right shift of x by y                                |
+| saru256(x:u256, y:u256) -> z:u256           | arithmetic right shift of x by y                                |
 +---------------------------------------------+-----------------------------------------------------------------+
 | byte(n:u256, x:u256) -> v:u256              | nth byte of x, where the most significant byte is the 0th byte  |
 |                                             | Cannot this be just replaced by and256(shr256(n, x), 0xff) and  |
@@ -515,6 +515,16 @@ The following functions must be available:
 +---------------------------------------------+-----------------------------------------------------------------+
 | keccak256(p:u256, s:u256) -> v:u256         | keccak(mem[p...(p+s)))                                          |
 +---------------------------------------------+-----------------------------------------------------------------+
+| *Object access*                             |                                                                 |
++---------------------------------------------+-----------------------------------------------------------------+
+| datasize(name:string) -> size:u256          | size of the data object in bytes, name has to be string literal |
++---------------------------------------------+-----------------------------------------------------------------+
+| dataoffset(name:string) -> offset:u256      | offset of the data object inside the data area in bytes,        |
+|                                             | name has to be string literal                                   |
++---------------------------------------------+-----------------------------------------------------------------+
+| datacopy(t:u256, o:u256, s:u256)            | copy s bytes from the data area starting at offset o bytes      |
+|                                             | to memory at position t                                         |
++---------------------------------------------+-----------------------------------------------------------------+
 
 Backends
 --------
@@ -540,12 +550,19 @@ TBD
 Specification of Yul Object
 ===========================
 
+Yul objects are used to group named code and data sections.
+The functions ``datasize``, ``dataoffset`` and ``datacopy``
+can be used to access these sections from within code.
+Hex strings can be used to specify data in hex encoding,
+regular strings in native encoding. For code,
+``datacopy`` will access its assembled binary representation.
+
 Grammar::
 
     TopLevelObject = 'object' '{' Code? ( Object | Data )* '}'
     Object = 'object' StringLiteral '{' Code? ( Object | Data )* '}'
     Code = 'code' Block
-    Data = 'data' StringLiteral HexLiteral
+    Data = 'data' StringLiteral ( HexLiteral | StringLiteral )
     HexLiteral = 'hex' ('"' ([0-9a-fA-F]{2})* '"' | '\'' ([0-9a-fA-F]{2})* '\'')
     StringLiteral = '"' ([^"\r\n\\] | '\\' .)* '"'
 
@@ -558,13 +575,16 @@ An example Yul Object is shown below:
     // Code consists of a single object. A single "code" node is the code of the object.
     // Every (other) named object or data section is serialized and
     // made accessible to the special built-in functions datacopy / dataoffset / datasize
-    object {
+    // Access to nested objects can be performed by joining the names using ``.``.
+    // The current object and sub-objects and data items inside the current object
+    // are in scope without nested access.
+    object "Contract1" {
         code {
-            let size = datasize("runtime")
-            let offset = allocate(size)
+            let size := datasize("runtime")
+            let offset := allocate(size)
             // This will turn into a memory->memory copy for eWASM and
             // a codecopy for EVM
-            datacopy(dataoffset("runtime"), offset, size)
+            datacopy(offset, dataoffset("runtime"), size)
             // this is a constructor and the runtime code is returned
             return(offset, size)
         }
@@ -579,7 +599,7 @@ An example Yul Object is shown below:
                 let offset = allocate(size)
                 // This will turn into a memory->memory copy for eWASM and
                 // a codecopy for EVM
-                datacopy(dataoffset("Contract2"), offset, size)
+                datacopy(offset, dataoffset("Contract2"), size)
                 // constructor parameter is a single number 0x1234
                 mstore(add(offset, size), 0x1234)
                 create(offset, add(size, 32))
