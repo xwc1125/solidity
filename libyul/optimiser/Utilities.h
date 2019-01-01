@@ -20,15 +20,15 @@
 
 #pragma once
 
-#include <libyul/ASTDataForward.h>
+#include <libdevcore/Common.h>
+#include <libyul/AsmDataForward.h>
 
-namespace dev
-{
 namespace yul
 {
 
 /// Removes statements that are just empty blocks (non-recursive).
 void removeEmptyBlocks(Block& _block);
 
-}
+dev::u256 valueOfNumberLiteral(Literal const& _literal);
+
 }

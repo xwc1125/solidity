@@ -19,15 +19,15 @@
  */
 
 #include <libdevcore/CommonIO.h>
-#include <libsolidity/inlineasm/AsmAnalysis.h>
-#include <libsolidity/inlineasm/AsmAnalysisInfo.h>
-#include <libsolidity/parsing/Scanner.h>
+#include <liblangutil/ErrorReporter.h>
+#include <liblangutil/Scanner.h>
+#include <libyul/AsmAnalysis.h>
+#include <libyul/AsmAnalysisInfo.h>
 #include <libsolidity/parsing/Parser.h>
-#include <libsolidity/inlineasm/AsmData.h>
-#include <libsolidity/inlineasm/AsmParser.h>
-#include <libsolidity/inlineasm/AsmPrinter.h>
-#include <libsolidity/interface/SourceReferenceFormatter.h>
-#include <libsolidity/interface/ErrorReporter.h>
+#include <libyul/AsmData.h>
+#include <libyul/AsmParser.h>
+#include <libyul/AsmPrinter.h>
+#include <liblangutil/SourceReferenceFormatter.h>
 
 #include <libyul/optimiser/BlockFlattener.h>
 #include <libyul/optimiser/Disambiguator.h>
@@ -38,6 +38,7 @@
 #include <libyul/optimiser/FunctionHoister.h>
 #include <libyul/optimiser/ExpressionInliner.h>
 #include <libyul/optimiser/FullInliner.h>
+#include <libyul/optimiser/ForLoopInitRewriter.h>
 #include <libyul/optimiser/MainFunction.h>
 #include <libyul/optimiser/Rematerialiser.h>
 #include <libyul/optimiser/ExpressionSimplifier.h>
@@ -45,7 +46,10 @@
 #include <libyul/optimiser/ExpressionJoiner.h>
 #include <libyul/optimiser/RedundantAssignEliminator.h>
 #include <libyul/optimiser/SSATransform.h>
-#include <libyul/optimiser/VarDeclPropagator.h>
+#include <libyul/optimiser/StructuralSimplifier.h>
+#include <libyul/optimiser/VarDeclInitializer.h>
+
+#include <libyul/backends/evm/EVMDialect.h>
 
 #include <libdevcore/JSON.h>
 
@@ -57,18 +61,18 @@
 
 using namespace std;
 using namespace dev;
+using namespace langutil;
 using namespace dev::solidity;
-using namespace dev::solidity::assembly;
-using namespace dev::yul;
+using namespace yul;
 
 namespace po = boost::program_options;
 
 class YulOpti
 {
 public:
-	void printErrors(Scanner const& _scanner)
+	void printErrors()
 	{
-		SourceReferenceFormatter formatter(cout, [&](string const&) -> Scanner const& { return _scanner; });
+		SourceReferenceFormatter formatter(cout);
 
 		for (auto const& error: m_errors)
 			formatter.printExceptionInformation(
@@ -80,26 +84,26 @@ public:
 	bool parse(string const& _input)
 	{
 		ErrorReporter errorReporter(m_errors);
-		shared_ptr<Scanner> scanner = make_shared<Scanner>(CharStream(_input), "");
-		m_ast = assembly::Parser(errorReporter, assembly::AsmFlavour::Strict).parse(scanner, false);
+		shared_ptr<Scanner> scanner = make_shared<Scanner>(CharStream(_input, ""));
+		m_ast = yul::Parser(errorReporter, yul::EVMDialect::strictAssemblyForEVM()).parse(scanner, false);
 		if (!m_ast || !errorReporter.errors().empty())
 		{
 			cout << "Error parsing source." << endl;
-			printErrors(*scanner);
+			printErrors();
 			return false;
 		}
-		m_analysisInfo = make_shared<assembly::AsmAnalysisInfo>();
+		m_analysisInfo = make_shared<yul::AsmAnalysisInfo>();
 		AsmAnalyzer analyzer(
 			*m_analysisInfo,
 			errorReporter,
 			EVMVersion::byzantium(),
-			boost::none,
-			AsmFlavour::Strict
+			langutil::Error::Type::SyntaxError,
+			EVMDialect::strictAssemblyForEVM()
 		);
 		if (!analyzer.analyze(*m_ast) || !errorReporter.errors().empty())
 		{
 			cout << "Error analyzing source." << endl;
-			printErrors(*scanner);
+			printErrors();
 			return false;
 		}
 		return true;
@@ -116,14 +120,15 @@ public:
 				return;
 			if (!disambiguated)
 			{
-				*m_ast = boost::get<assembly::Block>(Disambiguator(*m_analysisInfo)(*m_ast));
+				*m_ast = boost::get<yul::Block>(Disambiguator(*m_analysisInfo)(*m_ast));
 				m_analysisInfo.reset();
 				m_nameDispenser = make_shared<NameDispenser>(*m_ast);
 				disambiguated = true;
 			}
-			cout << "(q)quit/(f)flatten/(c)se/propagate var(d)ecls/(x)plit/(j)oin/(g)rouper/(h)oister/" << endl;
+			cout << "(q)quit/(f)flatten/(c)se/initialize var(d)ecls/(x)plit/(j)oin/(g)rouper/(h)oister/" << endl;
 			cout << "  (e)xpr inline/(i)nline/(s)implify/(u)nusedprune/ss(a) transform/" << endl;
-			cout << "  (r)edundant assign elim./re(m)aterializer? ";
+			cout << "  (r)edundant assign elim./re(m)aterializer/f(o)r-loop-pre-rewriter/" << endl;
+			cout << "  s(t)ructural simplifier? " << endl;
 			cout.flush();
 			int option = readStandardInputChar();
 			cout << ' ' << char(option) << endl;
@@ -134,11 +139,14 @@ public:
 			case 'f':
 				BlockFlattener{}(*m_ast);
 				break;
+			case 'o':
+				ForLoopInitRewriter{}(*m_ast);
+				break;
 			case 'c':
 				(CommonSubexpressionEliminator{})(*m_ast);
 				break;
 			case 'd':
-				(VarDeclPropagator{})(*m_ast);
+				(VarDeclInitializer{})(*m_ast);
 				break;
 			case 'x':
 				ExpressionSplitter{*m_nameDispenser}(*m_ast);
@@ -161,6 +169,9 @@ public:
 			case 's':
 				ExpressionSimplifier::run(*m_ast);
 				break;
+			case 't':
+				(StructuralSimplifier{})(*m_ast);
+				break;
 			case 'u':
 				UnusedPruner::runUntilStabilised(*m_ast);
 				break;
@@ -182,7 +193,7 @@ public:
 
 private:
 	ErrorList m_errors;
-	shared_ptr<assembly::Block> m_ast;
+	shared_ptr<yul::Block> m_ast;
 	shared_ptr<AsmAnalysisInfo> m_analysisInfo;
 	shared_ptr<NameDispenser> m_nameDispenser;
 };

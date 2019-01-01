@@ -13,7 +13,13 @@ Solidity provides several elementary types which can be combined to form complex
 In addition, types can interact with each other in expressions containing
 operators. For a quick reference of the various operators, see :ref:`order`.
 
+The concept of "undefined" or "null" values does not exist in Solidity, but newly
+declared variables always have a :ref:`default value<default-value>` dependent
+on its type. To handle any unexpected values, you should use the :ref:`revert function<assert-and-require>` to revert the whole transaction, or return a
+tuple with a second `bool` value denoting success.
+
 .. index:: ! value type, ! type;value
+.. _value-types:
 
 Value Types
 ===========
@@ -273,22 +279,22 @@ Example::
     when the call returns. The regular way to interact with other contracts
     is to call a function on a contract object (``x.f()``).
 
-:: note::
+.. note::
     Previous versions of Solidity allowed these functions to receive
     arbitrary arguments and would also handle a first argument of type
     ``bytes4`` differently. These edge cases were removed in version 0.5.0.
 
 It is possible to adjust the supplied gas with the ``.gas()`` modifier::
 
-    namReg.call.gas(1000000)(abi.encodeWithSignature("register(string)", "MyName"));
+    address(nameReg).call.gas(1000000)(abi.encodeWithSignature("register(string)", "MyName"));
 
 Similarly, the supplied Ether value can be controlled too::
 
-    nameReg.call.value(1 ether)(abi.encodeWithSignature("register(string)", "MyName"));
+    address(nameReg).call.value(1 ether)(abi.encodeWithSignature("register(string)", "MyName"));
 
 Lastly, these modifiers can be combined. Their order does not matter::
 
-    nameReg.call.gas(1000000).value(1 ether)(abi.encodeWithSignature("register(string)", "MyName"));
+    address(nameReg).call.gas(1000000).value(1 ether)(abi.encodeWithSignature("register(string)", "MyName"));
 
 In a similar way, the function ``delegatecall`` can be used: the difference is that only the code of the given address is used, all other aspects (storage, balance, ...) are taken from the current contract. The purpose of ``delegatecall`` is to use library code which is stored in another contract. The user has to ensure that the layout of storage in both contracts is suitable for delegatecall to be used.
 
@@ -460,10 +466,12 @@ a non-rational number).
 .. index:: literal, literal;string, string
 .. _string_literals:
 
-String Literals
----------------
+String Literals and Types
+-------------------------
 
 String literals are written with either double or single-quotes (``"foo"`` or ``'bar'``).  They do not imply trailing zeroes as in C; ``"foo"`` represents three bytes, not four.  As with integer literals, their type can vary, but they are implicitly convertible to ``bytes1``, ..., ``bytes32``, if they fit, to ``bytes`` and to ``string``.
+
+For example, with ``bytes32 samevar = "stringliteral"`` the string literal is interpreted in its raw byte form when assigned to a ``bytes32`` type.
 
 String literals support the following escape characters:
 
@@ -721,6 +729,8 @@ Another example that uses external function types::
 
 .. index:: ! type;reference, ! reference type, storage, memory, location, array, struct
 
+.. _reference-types:
+
 Reference Types
 ===============
 
@@ -754,14 +764,17 @@ non-persistent area where function arguments are stored, and behaves mostly like
     depending on the kind of variable, function type, etc., but all complex types must now give an explicit
     data location.
 
+.. _data-location-assignment:
+
+Data location and assignment behaviour
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 Data locations are not only relevant for persistency of data, but also for the semantics of assignments:
-assignments between storage and memory (or from calldata) always create an independent copy.
-Assignments from memory to memory only create references. This means that changes to one memory variable
-are also visible in all other memory variables that refer to the same data.
-Assignments from storage to a local storage variables also only assign a reference.
-In contrast, all other assignments to storage always copy. Examples for this case
-are assignments to state variables or to members of local variables of storage struct type, even
-if the local variable itself is just a reference.
+
+* Assignments between ``storage`` and ``memory`` (or from ``calldata``) always create an independent copy.
+* Assignments from ``memory`` to ``memory`` only create references. This means that changes to one memory variable are also visible in all other memory variables that refer to the same data.
+* Assignments from ``storage`` to a local storage variable also only assign a reference.
+* All other assignments to ``storage`` always copy. Examples for this case are assignments to state variables or to members of local variables of storage struct type, even if the local variable itself is just a reference.
 
 ::
 
@@ -798,40 +811,50 @@ if the local variable itself is just a reference.
 Arrays
 ------
 
-Arrays can have a compile-time fixed size or they can be dynamic.
-The are few restrictions for the element, it can also be
-another array, a mapping or a struct. The general restrictions for
-types apply, though, in that mappings can only be used in storage
-and publicly-visible functions need parameters that are :ref:`ABI types <ABI>`.
+Arrays can have a compile-time fixed size, or they can have a dynamic size.
 
-An array of fixed size ``k`` and element type ``T`` is written as ``T[k]``,
-an array of dynamic size as ``T[]``. As an example, an array of 5 dynamic
-arrays of ``uint`` is ``uint[][5]`` (note that the notation is reversed when
-compared to some other languages). To access the second uint in the
-third dynamic array, you use ``x[2][1]`` (indices are zero-based and
-access works in the opposite way of the declaration, i.e. ``x[2]``
-shaves off one level in the type from the right).
+The type of an array of fixed size ``k`` and element type ``T`` is written as ``T[k]``,
+and an array of dynamic size as ``T[]``.
 
-Accessing an array past its end causes a revert. If you want to add
-new elements, you have to use ``.push()`` or increase the ``.length``
-member (see below).
+For example, an array of 5 dynamic arrays of ``uint`` is written as
+``uint[][5]``. The notation is reversed compared to some other languages. In
+Solidity, ``X[3]`` is always an array containing three elements of type ``X``,
+even if ``X`` is itself an array. This is not the case in other languages such
+as C.
+
+Indices are zero-based, and access is in the opposite direction of the
+declaration.
+
+For example, if you have a variable ``uint[][5] x memory``, you access the
+second ``uint`` in the third dynamic array using ``x[2][1]``, and to access the
+third dynamic array, use ``x[2]``. Again,
+if you have an array ``T[5] a`` for a type ``T`` that can also be an array,
+then ``a[2]`` always has type ``T``.
+
+Array elements can be of any type, including mapping or struct. The general
+restrictions for types apply, in that mappings can only be stored in the
+``storage`` data location and publicly-visible functions need parameters that are :ref:`ABI types <ABI>`.
+
+Accessing an array past its end causes a failing assertion. You can use the ``.push()`` method to append a new element at the end or assign to the ``.length`` :ref:`member <array-members>` to change the size (see below for caveats).
+method or increase the ``.length`` :ref:`member <array-members>` to add elements.
 
 Variables of type ``bytes`` and ``string`` are special arrays. A ``bytes`` is similar to ``byte[]``,
 but it is packed tightly in calldata and memory. ``string`` is equal to ``bytes`` but does not allow
 length or index access.
-So ``bytes`` should always be preferred over ``byte[]`` because it is cheaper.
-As a rule of thumb, use ``bytes`` for arbitrary-length raw byte data and ``string``
-for arbitrary-length string (UTF-8) data. If you can limit the length to a certain
-number of bytes, always use one of ``bytes1`` to ``bytes32`` because they are much cheaper.
+
+You should use ``bytes`` over ``byte[]`` because it is cheaper, since ``byte[]`` adds 31 padding bytes between the elements. As a general rule,
+use ``bytes`` for arbitrary-length raw byte data and ``string`` for arbitrary-length
+string (UTF-8) data. If you can limit the length to a certain number of bytes,
+always use one of the value types ``bytes1`` to ``bytes32`` because they are much cheaper.
 
 .. note::
     If you want to access the byte-representation of a string ``s``, use
     ``bytes(s).length`` / ``bytes(s)[7] = 'x';``. Keep in mind
     that you are accessing the low-level bytes of the UTF-8 representation,
-    and not the individual characters!
+    and not the individual characters.
 
 It is possible to mark arrays ``public`` and have Solidity create a :ref:`getter <visibility-and-getters>`.
-The numeric index will become a required parameter for the getter.
+The numeric index becomes a required parameter for the getter.
 
 .. index:: ! array;allocating, new
 
@@ -857,13 +880,20 @@ or create a new memory array and copy every element.
         }
     }
 
-.. index:: ! array;literals, !inline;arrays
+.. index:: ! array;literals, ! inline;arrays
 
-Array Literals / Inline Arrays
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Array Literals
+^^^^^^^^^^^^^^
 
-Array literals are arrays that are written as an expression and are not
-assigned to a variable right away.
+An array literal is a comma-separated list of one or more expressions, enclosed
+in square brackets (``[...]``). For example ``[1, a, f(3)]``. There must be a
+common type all elements can be implicitly converted to. This is the elementary
+type of the array.
+
+Array literals are always statically-sized memory arrays.
+
+In the example below, the type of ``[1, 2, 3]`` is
+``uint8[3] memory``. Because the type of each of these constants is ``uint8``, if you want the result to be a ``uint[3] memory`` type, you need to convert the first element to ``uint``.
 
 ::
 
@@ -878,13 +908,7 @@ assigned to a variable right away.
         }
     }
 
-The type of an array literal is a memory array of fixed size whose base
-type is the common type of the given elements. The type of ``[1, 2, 3]`` is
-``uint8[3] memory``, because the type of each of these constants is ``uint8``.
-Because of that, it is necessary to convert the first element in the example
-above to ``uint``. Note that currently, fixed size memory arrays cannot
-be assigned to dynamically-sized memory arrays, i.e. the following is not
-possible:
+Fixed size memory arrays cannot be assigned to dynamically-sized memory arrays, i.e. the following is not possible:
 
 ::
 
@@ -899,13 +923,15 @@ possible:
         }
     }
 
-It is planned to remove this restriction in the future but currently creates
-some complications because of how arrays are passed in the ABI.
+It is planned to remove this restriction in the future, but it creates some
+complications because of how arrays are passed in the ABI.
 
 .. index:: ! array;length, length, push, pop, !array;push, !array;pop
 
-Members
-^^^^^^^
+.. _array-members:
+
+Array Members
+^^^^^^^^^^^^^
 
 **length**:
     Arrays have a ``length`` member that contains their number of elements.
@@ -913,7 +939,9 @@ Members
     For dynamically-sized arrays (only available for storage), this member can be assigned to resize the array.
     Accessing elements outside the current length does not automatically resize the array and instead causes a failing assertion.
     Increasing the length adds new zero-initialised elements to the array.
-    Reducing the length performs an implicit :ref:``delete`` on each of the removed elements.
+    Reducing the length performs an implicit :ref:``delete`` on each of the
+    removed elements. If you try to resize a non-dynamic array that isn't in
+    storage, you receive a ``Value must be an lvalue`` error.
 **push**:
      Dynamic storage arrays and ``bytes`` (not ``string``) have a member function called ``push`` that you can use to append an element at the end of the array. The element will be zero-initialised. The function returns the new length.
 **pop**:
@@ -1110,9 +1138,10 @@ assigning it to a local variable, as in
 ``campaigns[campaignID].amount = 0``.
 
 .. index:: !mapping
+.. _mapping-types:
 
-Mappings
---------
+Mapping Types
+=============
 
 You declare mapping types with the syntax ``mapping(_KeyType => _ValueType)``.
 The ``_KeyType`` can be any elementary type. This means it can be any of
@@ -1179,7 +1208,14 @@ If ``a`` is an LValue (i.e. a variable or something that can be assigned to), th
 delete
 ------
 
-``delete a`` assigns the initial value for the type to ``a``. I.e. for integers it is equivalent to ``a = 0``, but it can also be used on arrays, where it assigns a dynamic array of length zero or a static array of the same length with all elements reset. For structs, it assigns a struct with all members reset. In other words, the value of ``a`` after ``delete a`` is the same as if ``a`` would be declared without assignment, with the following caveat:
+``delete a`` assigns the initial value for the type to ``a``. I.e. for integers it is
+equivalent to ``a = 0``, but it can also be used on arrays, where it assigns a dynamic
+array of length zero or a static array of the same length with all elements set to their
+initial value. ``delete a[x]`` deletes the item at index ``x`` of the array and leaves
+all other elements and the length of the array untouched. This especially means that it leaves
+a gap in the array. If you plan to remove items, a mapping is probably a better choice.
+
+For structs, it assigns a struct with all members reset. In other words, the value of ``a`` after ``delete a`` is the same as if ``a`` would be declared without assignment, with the following caveat:
 
 ``delete`` has no effect on mappings (as the keys of mappings may be arbitrary and are generally unknown). So if you delete a struct, it will reset all members that are not mappings and also recurse into the members unless they are mappings. However, individual keys and what they map to can be deleted: If ``a`` is a mapping, then ``delete a[x]`` will delete the value stored at ``x``.
 

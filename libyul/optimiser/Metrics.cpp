@@ -20,10 +20,10 @@
 
 #include <libyul/optimiser/Metrics.h>
 
-#include <libsolidity/inlineasm/AsmData.h>
+#include <libyul/AsmData.h>
 
 using namespace dev;
-using namespace dev::yul;
+using namespace yul;
 
 size_t CodeSize::codeSize(Statement const& _statement)
 {
@@ -48,6 +48,9 @@ size_t CodeSize::codeSize(Block const& _block)
 
 void CodeSize::visit(Statement const& _statement)
 {
+	if (_statement.type() == typeid(FunctionDefinition))
+		return;
+
 	++m_size;
 	ASTWalker::visit(_statement);
 }

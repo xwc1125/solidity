@@ -21,34 +21,34 @@
 #include <libyul/optimiser/Suite.h>
 
 #include <libyul/optimiser/Disambiguator.h>
+#include <libyul/optimiser/VarDeclInitializer.h>
 #include <libyul/optimiser/FunctionGrouper.h>
 #include <libyul/optimiser/FunctionHoister.h>
 #include <libyul/optimiser/ExpressionSplitter.h>
 #include <libyul/optimiser/ExpressionJoiner.h>
 #include <libyul/optimiser/ExpressionInliner.h>
 #include <libyul/optimiser/FullInliner.h>
+#include <libyul/optimiser/ForLoopInitRewriter.h>
 #include <libyul/optimiser/Rematerialiser.h>
 #include <libyul/optimiser/UnusedPruner.h>
 #include <libyul/optimiser/ExpressionSimplifier.h>
 #include <libyul/optimiser/CommonSubexpressionEliminator.h>
 #include <libyul/optimiser/SSATransform.h>
+#include <libyul/optimiser/StructuralSimplifier.h>
 #include <libyul/optimiser/RedundantAssignEliminator.h>
-#include <libyul/optimiser/VarDeclPropagator.h>
-
-#include <libsolidity/inlineasm/AsmAnalysisInfo.h>
-#include <libsolidity/inlineasm/AsmData.h>
-
-#include <libsolidity/inlineasm/AsmPrinter.h>
+#include <libyul/AsmAnalysisInfo.h>
+#include <libyul/AsmData.h>
+#include <libyul/AsmPrinter.h>
 
 #include <libdevcore/CommonData.h>
 
 using namespace std;
 using namespace dev;
-using namespace dev::yul;
+using namespace yul;
 
 void OptimiserSuite::run(
 	Block& _ast,
-	solidity::assembly::AsmAnalysisInfo const& _analysisInfo,
+	AsmAnalysisInfo const& _analysisInfo,
 	set<YulString> const& _externallyUsedIdentifiers
 )
 {
@@ -56,8 +56,11 @@ void OptimiserSuite::run(
 
 	Block ast = boost::get<Block>(Disambiguator(_analysisInfo, reservedIdentifiers)(_ast));
 
+	(VarDeclInitializer{})(ast);
 	(FunctionHoister{})(ast);
 	(FunctionGrouper{})(ast);
+	(ForLoopInitRewriter{})(ast);
+	StructuralSimplifier{}(ast);
 
 	NameDispenser dispenser{ast};
 
@@ -66,11 +69,11 @@ void OptimiserSuite::run(
 		ExpressionSplitter{dispenser}(ast);
 		SSATransform::run(ast, dispenser);
 		RedundantAssignEliminator::run(ast);
-		VarDeclPropagator{}(ast);
 		RedundantAssignEliminator::run(ast);
 
 		CommonSubexpressionEliminator{}(ast);
 		ExpressionSimplifier::run(ast);
+		StructuralSimplifier{}(ast);
 		SSATransform::run(ast, dispenser);
 		RedundantAssignEliminator::run(ast);
 		RedundantAssignEliminator::run(ast);
@@ -92,26 +95,22 @@ void OptimiserSuite::run(
 		RedundantAssignEliminator::run(ast);
 		CommonSubexpressionEliminator{}(ast);
 		FullInliner{ast, dispenser}.run();
-		VarDeclPropagator{}(ast);
 		SSATransform::run(ast, dispenser);
 		RedundantAssignEliminator::run(ast);
-		VarDeclPropagator{}(ast);
 		RedundantAssignEliminator::run(ast);
 		ExpressionSimplifier::run(ast);
+		StructuralSimplifier{}(ast);
 		CommonSubexpressionEliminator{}(ast);
 		SSATransform::run(ast, dispenser);
 		RedundantAssignEliminator::run(ast);
-		VarDeclPropagator{}(ast);
 		RedundantAssignEliminator::run(ast);
 		UnusedPruner::runUntilStabilised(ast, reservedIdentifiers);
 	}
 	ExpressionJoiner::run(ast);
-	VarDeclPropagator{}(ast);
 	UnusedPruner::runUntilStabilised(ast);
 	ExpressionJoiner::run(ast);
 	UnusedPruner::runUntilStabilised(ast);
 	ExpressionJoiner::run(ast);
-	VarDeclPropagator{}(ast);
 	UnusedPruner::runUntilStabilised(ast);
 	ExpressionJoiner::run(ast);
 	UnusedPruner::runUntilStabilised(ast);

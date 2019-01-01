@@ -1,15 +1,85 @@
-### 0.5.1 (unreleased)
+### 0.5.3 (unreleased)
 
 Language Features:
 
 
 Compiler Features:
- * Build System: LLL is not built anymore by default. Must configure it with CMake as `-DLLL=ON`.
- * Code generator: Do not perform redundant double cleanup on unsigned integers when loading from calldata.
 
 
 Bugfixes:
 
+
+Build System:
+
+
+### 0.5.2 (2018-12-19)
+
+Language Features:
+ * Control Flow Graph: Detect every access to uninitialized storage pointers.
+
+
+Compiler Features:
+ * Inline Assembly: Improve error messages around invalid function argument count.
+ * Code Generator: Only check callvalue once if all functions are non-payable.
+ * Code Generator: Use codecopy for string constants more aggressively.
+ * Code Generator: Use binary search for dispatch function if more efficient. The size/speed tradeoff can be tuned using ``--optimize-runs``.
+ * SMTChecker: Support mathematical and cryptographic functions in an uninterpreted way.
+ * SMTChecker: Support one-dimensional mappings.
+ * Standard JSON Interface: Disallow unknown keys in standard JSON input.
+ * Standard JSON Interface: Only run code generation if it has been requested. This could lead to unsupported feature errors only being reported at the point where you request bytecode.
+ * Static Analyzer: Do not warn about unused variables or state mutability for functions with an empty body.
+ * Type Checker: Add an additional reason to be displayed when type conversion fails.
+ * Yul: Support object access via ``datasize``, ``dataoffset`` and ``datacopy`` in standalone assembly mode.
+
+
+Bugfixes:
+ * Standard JSON Interface: Report specific error message for json input errors instead of internal compiler error.
+
+
+Build System:
+ * Replace the trusty PPA build by a static build on cosmic that is used for the trusty package instead.
+ * Remove support for Visual Studio 2015.
+
+
+### 0.5.1 (2018-12-03)
+
+Language Features:
+ * Allow mapping type for parameters and return variables of public and external library functions.
+ * Allow public functions to override external functions.
+
+Compiler Features:
+ * Code generator: Do not perform redundant double cleanup on unsigned integers when loading from calldata.
+ * Commandline interface: Experimental ``--optimize`` option for assembly mode (``--strict-assembly`` and ``--yul``).
+ * SMTChecker: SMTLib2 queries and responses passed via standard JSON compiler interface.
+ * SMTChecker: Support ``msg``, ``tx`` and ``block`` member variables.
+ * SMTChecker: Support ``gasleft()`` and ``blockhash()`` functions.
+ * SMTChecker: Support internal bound function calls.
+ * Yul: Support Yul objects in ``--assemble``, ``--strict-assembly`` and ``--yul`` commandline options.
+
+Bugfixes:
+ * Assembly output: Do not mix in/out jump annotations with arguments.
+ * Commandline interface: Fix crash when using ``--ast`` on empty runtime code.
+ * Code Generator: Annotate jump from calldata decoder to function as "jump in".
+ * Code Generator: Fix internal error related to state variables of function type access via base contract name.
+ * Optimizer: Fix nondeterminism bug related to the boost version and constants representation. The bug only resulted in less optimal but still correct code because the generated routine is always verified to be correct.
+ * Type Checker: Properly detect different return types when overriding an external interface function with a public contract function.
+ * Type Checker: Disallow struct return types for getters of public state variables unless the new ABI encoder is active.
+ * Type Checker: Fix internal compiler error when a field of a struct used as a parameter in a function type has a non-existent type.
+ * Type Checker: Disallow functions ``sha3`` and ``suicide`` also without a function call.
+ * Type Checker: Fix internal compiler error with ``super`` when base contract function is not implemented.
+ * Type Checker: Fixed internal error when trying to create abstract contract in some cases.
+ * Type Checker: Fixed internal error related to double declaration of events.
+ * Type Checker: Disallow inline arrays of mapping type.
+ * Type Checker: Consider abstract function to be implemented by public state variable.
+
+Build System:
+ * CMake: LLL is not built anymore by default. Must configure it with CMake as `-DLLL=ON`.
+ * Docker: Includes both Scratch and Alpine images.
+ * Emscripten: Upgrade to Emscripten SDK 1.37.21 and boost 1.67.
+
+Solc-Js:
+ * Fix handling of standard-json in the commandline executable.
+ * Remove support of nodejs 4.
 
 
 ### 0.5.0 (2018-11-13)

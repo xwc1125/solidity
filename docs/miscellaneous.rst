@@ -8,12 +8,16 @@ Miscellaneous
 Layout of State Variables in Storage
 ************************************
 
-Statically-sized variables (everything except mapping and dynamically-sized array types) are laid out contiguously in storage starting from position ``0``. Multiple items that need less than 32 bytes are packed into a single storage slot if possible, according to the following rules:
+Statically-sized variables (everything except mapping and dynamically-sized array types) are laid out contiguously in storage starting from position ``0``. Multiple, contiguous items that need less than 32 bytes are packed into a single storage slot if possible, according to the following rules:
 
 - The first item in a storage slot is stored lower-order aligned.
 - Elementary types use only that many bytes that are necessary to store them.
 - If an elementary type does not fit the remaining part of a storage slot, it is moved to the next storage slot.
 - Structs and array data always start a new slot and occupy whole slots (but items inside a struct or array are packed tightly according to these rules).
+
+For contracts that use inheritance, the ordering of state variables is determined by the
+C3-linearized order of contracts starting with the most base-ward contract. If allowed
+by the above rules, state variables from different contracts do share the same storage slot.
 
 .. warning::
     When using elements that are smaller than 32 bytes, your contract's gas usage may be higher.
@@ -220,9 +224,9 @@ for displaying the current position in the source code inside a debugger
 or for breakpoint handling.
 
 Both kinds of source mappings use integer identifiers to refer to source files.
-These are regular array indices into a list of source files usually called
-``"sourceList"``, which is part of the combined-json and the output of
-the json / npm compiler.
+The identifier of a source file is stored in
+``output['sources'][sourceName]['id']`` where ``output`` is the output of the
+standard-json compiler interface parsed as JSON.
 
 .. note ::
     In the case of instructions that are not associated with any particular source file,
